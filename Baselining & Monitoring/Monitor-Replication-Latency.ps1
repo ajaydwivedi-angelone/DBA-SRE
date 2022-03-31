@@ -3,6 +3,7 @@
 ## *************************************************************************** #>
 $DistributorConfig = Get-DbaRegisteredServer | ? {$_.Name -eq 'Distributor'}
 $Distributor = $DistributorConfig | Connect-DbaInstance
+$DistributorName = $DistributorConfig.ServerName
 $DistributionDb = 'distribution'
 
 # Local variables
@@ -66,18 +67,29 @@ SELECT @@SERVERNAME as [publisher], DB_NAME() as publisher_db, getdate() as [cur
 
 "{0} {1,-7} {2}" -f "($((Get-Date).ToString('yyyy-MM-dd HH:mm:ss')))","(INFO)","Insert tracer token using [sp_posttracertoken]" | Write-Host -ForegroundColor Cyan
 [System.Collections.ArrayList]$tokenInserted = @()
+$tokenInsertFailure = @()
 foreach($srv in $publishers)
 {
     "{0} {1,-7} {2}" -f "($((Get-Date).ToString('yyyy-MM-dd HH:mm:ss')))","(INFO)","Post token on Publications of [$srv]" | Write-Host -ForegroundColor Cyan
     $srvPublications = $resultGetPublications | Where-Object {$_.publisher -eq $srv}
-    $pubSrvObj = Connect-DbaInstance -SqlInstance $srv -SqlCredential $sqlCredential
+    #$pubSrvObj = Connect-DbaInstance -SqlInstance $srv -SqlCredential $sqlCredential
+    $pubSrvObj = Get-DbaRegisteredServer -Name $srv -Group 'Replication-Publisher' | Connect-DbaInstance
     foreach($pub in $srvPublications)
     {
-        $resultInsertToken = Invoke-DbaQuery -SqlInstance $pubSrvObj -Database $pub.publisher_db -Query $tsqlInsertToken -SqlParameters @{ p_publication = $($pub.publication)}
-        $tokenInserted.Add($resultInsertToken) | Out-Null
+        try {
+            $resultInsertToken = Invoke-DbaQuery -SqlInstance $pubSrvObj -Database $pub.publisher_db -Query $tsqlInsertToken `
+                                            -SqlParameters @{ p_publication = $($pub.publication)} -EnableException
+            $tokenInserted.Add($resultInsertToken) | Out-Null
+        }
+        catch {
+            $err = $_
+            $tokenInsertFailure += (New-Object psobject -Property @{Publisher = $srv; PublisherDb = $pub.publisher_db; Publication = $pub.publication; ErrorMessage = $err.ToString()})
+            $_ | Write-Host -ForegroundColor Red
+        }
     }
 }
 #$tokenInserted | ogv -Title "Tokens inserted"
+#$tokenInsertFailure | ogv
 
 "{0} {1,-7} {2}" -f "($((Get-Date).ToString('yyyy-MM-dd HH:mm:ss')))","(SLEEP)","Sleep for 15 seconds" | Write-Host -ForegroundColor Yellow
 Start-Sleep -Seconds 15

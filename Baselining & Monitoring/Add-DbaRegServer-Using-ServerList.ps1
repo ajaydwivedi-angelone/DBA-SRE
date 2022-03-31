@@ -1,5 +1,7 @@
 ﻿# Get List of Servers
-$Servers = Import-Excel D:\GitHub-Office\Personal\Database-Server-List.xlsx | Select-Object -ExpandProperty 'DB Host (IP)'
+$Servers = Import-Excel D:\Ajay-Dwivedi\RegisteredServers.xlsx | Select-Object -ExpandProperty 'DB Host (IP)'
+
+$Servers | Add-DbaRegServer
 
 # Get my Credentials
 $cred = Get-Credential -UserName 'E84947' -Message 'SQL Credentials'
