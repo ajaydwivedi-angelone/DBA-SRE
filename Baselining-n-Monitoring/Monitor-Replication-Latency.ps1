@@ -83,7 +83,7 @@ foreach($srv in $publishers)
         }
         catch {
             $err = $_
-            $tokenInsertFailure += (New-Object psobject -Property @{Publisher = $srv; PublisherDb = $pub.publisher_db; Publication = $pub.publication; ErrorMessage = $err.ToString()})
+            $tokenInsertFailure += (New-Object psobject -Property @{CollectionTimeUTC = $startTime.ToUniversalTime(); Distributor = $DistributorName; Publisher = $srv; PublisherDb = $pub.publisher_db; Publication = $pub.publication; ErrorMessage = $err.ToString()})
             $_ | Write-Host -ForegroundColor Red
         }
     }
