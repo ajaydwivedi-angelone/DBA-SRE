@@ -65,6 +65,13 @@ CREATE TABLE [dbo].[repl_token_history]
 ) on ps_dba([collection_time_utc])
 GO
 
-create nonclustered index ci_repl_token_history on dbo.[repl_token_history]
-	(publisher, publication_display_name, subscription_display_name, publisher_commit desc) include (overall_latency) on ps_dba([collection_time_utc])
+USE [DBA_Admin]
+GO
+
+--DROP INDEX [nci_repl_token_history] ON [dbo].[repl_token_history]
+GO
+
+create nonclustered index nci_repl_token_history on dbo.[repl_token_history]
+	--(publisher, publication_display_name, subscription_display_name, publisher_commit desc) include (overall_latency) on ps_dba([collection_time_utc])
+	(publisher, publication_display_name, subscription_display_name, publisher_commit desc) include (overall_latency)
 go
