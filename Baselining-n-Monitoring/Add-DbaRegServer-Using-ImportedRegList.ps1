@@ -9,7 +9,7 @@ $failedServers = @()
 foreach($srv in $Servers)
 {
     try {
-        Connect-DbaInstance -SqlInstance $srv.ServerName -SqlCredential $cred | Add-DbaRegServer -Name $srv.Name -Group 'Replication-Publisher'
+        Connect-DbaInstance -SqlInstance $srv.ServerName -SqlCredential $cred | Add-DbaRegServer -Name $srv.Name
         "[$($srv.ServerName) ~ $($srv.Name)] added " | Write-Host -ForegroundColor Green
     }
     catch {

@@ -15,7 +15,7 @@ declare @tsqlString nvarchar(4000);
 
 -- Find oldest tracer token yet to be processed in DBA table
 select @oldest_pending_publisher_commit = dateadd(second,-5,min(collection_time))
-from DBA_Admin..repl_token_header h where h.is_processed = 0;
+from dbo.repl_token_header h where h.is_processed = 0;
 
 if object_id('tempdb..#subs') is not null
 	drop table #subs;
@@ -60,11 +60,11 @@ on tkn.publication_id = subs.publication_id and tkn.agent_id = subs.agent_id;
 select * from #MStracer_tokens where tracer_id is null
 select top 10 * from #subs where publication_id = 83
 select top 3 * from #MStracer_tokens where publisher = 'ANAND1\ANAND1' --and publication_display_name = '[MCDX]: mcdx_CLient2_to35' order by [subscription_display_name]
-select top 3 * from DBA_Admin..repl_token_header where is_processed = 0
+select top 3 * from dbo.repl_token_header where is_processed = 0
 */
 begin tran
 	--	Insert processed tokens in History Table
-	insert DBA_Admin..[repl_token_history]
+	insert dbo.[repl_token_history]
 	(	[publisher], [publication_display_name], [subscription_display_name], [publisher_db], publication, publisher_commit, 
 		distributor_commit, [distributor_latency], subscriber, subscriber_db, subscriber_commit, [subscriber_latency],
 		[overall_latency], [agent_name]
@@ -74,7 +74,7 @@ begin tran
 			h.subscriber_commit, [subscriber_latency] = datediff(minute,h.distributor_commit,h.subscriber_commit),
 			[overall_latency] = datediff(minute,h.publisher_commit,h.subscriber_commit), [agent_name] = h.agent_name
 	from #MStracer_tokens as h
-	join DBA_Admin..repl_token_header as b
+	join dbo.repl_token_header as b
 	on b.publisher = h.publisher
 	and b.publisher_db = h.publisher_db
 	and b.publication_id = h.publication_id
@@ -82,67 +82,60 @@ begin tran
 	where b.is_processed = 0
 	and h.subscriber_commit is not null;
 
-	--	Update process flag for processed tokens in History Table
+	-- List Tokens pending for any subscription	
+	if object_id('tempdb..#pending_tokens') is not null
+		drop table #pending_tokens
+	select distinct publisher, publisher_db, publication, publication_id, h.tracer_id
+	into #pending_tokens
+	from #MStracer_tokens as h
+	where h.subscriber_commit is null;
+	
+	-- Mark tokens processed if reached all subscriptions
 	update b
 	set is_processed = 1
+	-- select b.*, pt.tracer_id
 	from #MStracer_tokens as h
-	join DBA_Admin..repl_token_header as b
-	on b.publication = h.publication 
-	and b.tracer_id = h.tracer_id
+	join dbo.repl_token_header as b
+	on b.publisher = h.publisher
+	and b.publisher_db = h.publisher_db
+	and b.publication = h.publication 
+	and b.publication_id = h.publication_id
+	and b.token_id = h.tracer_id
+	left join #pending_tokens pt
+	on pt.publisher = h.publisher
+	and pt.publisher_db = h.publisher_db
+	and pt.publication = h.publication
+	and pt.publication_id = h.publication_id
+	and pt.tracer_id = h.tracer_id
 	where b.is_processed = 0
-	and h.subscriber_commit is not null;
+	and pt.tracer_id is null;
 commit tran
 /*
- select top 3 * from DBA_Admin..[repl_token_history]
- select top 3 * from DBA_Admin..repl_token_header as b
+ select top 3 * from dbo.[repl_token_history]
+ select top 3 * from dbo.repl_token_header as b
  select top 3 * from #MStracer_tokens as h
 */
+
 --	Update process flag for lost tokens
 ;with t_Repl_TracerToken_Lastest_Processed as (
-	select publication, max(publisher_commit) as last_publisher_commit 
-	from DBA_Admin..repl_token_header where is_processed = 1 group by publication
+	select publisher, publisher_db, publication, publication_id, max(collection_time) as last_publisher_commit 
+	from dbo.repl_token_header 
+	where is_processed = 1 
+	group by publisher, publisher_db, publication, publication_id
 )
 update h
 set is_processed = 1
 --select h.*
-from DBA_Admin..repl_token_header as h
+from dbo.repl_token_header as h
 inner join t_Repl_TracerToken_Lastest_Processed as l
-on l.publication = h.publication and h.publisher_commit < l.last_publisher_commit
+on l.publication = h.publication and h.collection_time < l.last_publisher_commit
 where h.is_processed = 0
 
---	select * from DBA_Admin..[repl_token_history]
-
 /*
-use DBA
-go
+-- Get Latest Latency
+select top 1 with ties h.publisher, publication_display_name, subscription_display_name, last_token_time = publisher_commit, last_token_latency_seconds = overall_latency
+		,current_latency_seconds = datediff(second,collection_time_utc,SYSUTCDATETIME())
+from dbo.[repl_token_history] h
+order by ROW_NUMBER()over(partition by publisher, publication_display_name, subscription_display_name order by publisher_commit desc);
 
---drop table [dbo].[repl_token_history]
-
-CREATE TABLE [dbo].[repl_token_history](
-	[publication] [sysname] NOT NULL,
-	[publisher_commit] [datetime] NOT NULL,
-	[distributor_commit] [datetime] NOT NULL,
-	[distributor_latency] AS datediff(minute,publisher_commit,distributor_commit),
-	[subscriber] [sysname] NOT NULL,
-	[subscriber_db] [sysname] NOT NULL,
-	[subscriber_commit] [datetime] NOT NULL,
-	[subscriber_latency] AS datediff(minute,distributor_commit,subscriber_commit),
-	[overall_latency] AS datediff(minute,publisher_commit,subscriber_commit),
-	[collection_time] [datetime] NOT NULL DEFAULT getdate()
-)
-GO
-
-CREATE CLUSTERED INDEX [CI_repl_token_history] ON [dbo].[repl_token_history]
-(
-	[collection_time] ASC,
-	[publication] ASC
-)
-GO
-
-CREATE NONCLUSTERED INDEX [NCI_repl_token_history] ON [dbo].[repl_token_history]
-(
-	[publication] ASC,
-	[publisher_commit] ASC
-)
-go
 */

@@ -7,14 +7,11 @@ Param (
     $ReplTokenErrorTableName = '[dbo].[repl_token_insert_log]'
 )
 
-#$InventoryServer = 'localhost'
-#$InventoryDb = 'DBA_Inventory'
-
 <# ****************************************************************************#
 ## ************** Validate Replication Health using Tracer Tokens *************#
 ## *************************************************************************** #>
 "{0} {1,-7} {2}" -f "($((Get-Date).ToString('yyyy-MM-dd HH:mm:ss')))","(INFO)","Get distributor [$DistributorIP] credentials from RegisteredServers List" | Write-Output
-$DistributorConfig = Get-DbaRegisteredServer -Group All | ? {$_.ServerName -eq $DistributorIP} | Select-Object -First 1;
+$DistributorConfig = Get-DbaRegisteredServer | ? {$_.ServerName -eq $DistributorIP} | Select-Object -First 1;
 $Distributor = $DistributorConfig.ConnectionString | Connect-DbaInstance
 
 # Local variables
@@ -84,7 +81,7 @@ foreach($srv in $publishers)
     "{0} {1,-7} {2}" -f "($((Get-Date).ToString('yyyy-MM-dd HH:mm:ss')))","(INFO)","Post token on Publications of [$srv]" | Write-Output
     $srvPublications = $resultGetPublications | Where-Object {$_.publisher -eq $srv}
     #$pubSrvObj = Connect-DbaInstance -SqlInstance $srv -SqlCredential $sqlCredential
-    $pubSrvObj = Get-DbaRegisteredServer -Name $srv -Group 'Replication-Publisher' | Connect-DbaInstance
+    $pubSrvObj = Get-DbaRegisteredServer -Name $srv | Connect-DbaInstance
     foreach($pub in $srvPublications)
     {
         $params = @{ p_distributor = $DistributorIP;

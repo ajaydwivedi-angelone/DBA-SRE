@@ -41,10 +41,11 @@ create clustered index ci_replication_tokens_insert_log on [dbo].[repl_token_ins
 go
 
 
---drop table [dbo].[repl_token_history]
+-- drop table [dbo].[repl_token_history]
 
 CREATE TABLE [dbo].[repl_token_history]
 (
+	[id] bigint identity(1,1) not null,
 	[publisher] [sysname] not null,
 	[publication_display_name] nvarchar(1000) not null,
 	[subscription_display_name] nvarchar(1000) not null,
@@ -57,23 +58,13 @@ CREATE TABLE [dbo].[repl_token_history]
 	[subscriber_db] [sysname] NOT NULL,
 	[subscriber_commit] [datetime] NOT NULL,
 	[subscriber_latency] int not null, -- AS datediff(minute,distributor_commit,subscriber_commit),
-	[overall_latency] AS datediff(minute,publisher_commit,subscriber_commit),
+	[overall_latency] int not null, --AS datediff(minute,publisher_commit,subscriber_commit),
 	[agent_name] nvarchar(2000) not null,
 	[collection_time_utc] [datetime2] NOT NULL DEFAULT sysutcdatetime()
-	--,constraint pk_repl_token_history primary key clustered ([collection_time_utc], [publisher], [publication_display_name], [subscription_display_name]) on ps_dba([collection_time_utc])
+	,constraint pk_repl_token_history primary key clustered ([collection_time_utc],id) on ps_dba([collection_time_utc])
 ) on ps_dba([collection_time_utc])
 GO
 
-CREATE CLUSTERED INDEX ci_repl_token_history ON [dbo].[repl_token_history]
-(
-	[collection_time_utc] ASC,
-	[publication] ASC
-)
-GO
-
-CREATE NONCLUSTERED INDEX [NCI_repl_token_history] ON [dbo].[repl_token_history]
-(
-	[publication] ASC,
-	[publisher_commit] ASC
-)
+create nonclustered index ci_repl_token_history on dbo.[repl_token_history]
+	(publisher, publication_display_name, subscription_display_name, publisher_commit desc) include (overall_latency) on ps_dba([collection_time_utc])
 go
