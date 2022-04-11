@@ -8,6 +8,64 @@ go
 create partition scheme ps_dba as partition pf_dba all to ([primary])
 go
 
+--drop table [dbo].[repl_pub_subs]
+CREATE TABLE [dbo].[repl_pub_subs]
+(
+	[repl_id] [int] NOT NULL IDENTITY(1,1),
+	[publisher] [sysname] NOT NULL,
+	[publication_display_name] [nvarchar](388) NOT NULL,
+	[subscription_display_name] [nvarchar](517) NULL,
+	[publisher_db] [sysname] NULL,
+	--[publication_id] [int] NOT NULL,
+	[publication] [sysname] NULL,
+	--[agent_id] [int] NULL,
+	[agent_name] [nvarchar](100) NULL,
+	[subscriber] [sysname] NOT NULL,
+	[subscriber_db] [sysname] NULL,
+	[collection_time] [datetime2] NOT NULL DEFAULT SYSDATETIME(),
+	[status] char(10) not null default 'active'
+	,constraint pk_repl_pub_subs primary key (repl_id)
+)
+GO
+
+--drop INDEX [nci_repl_pub_subs] ON [dbo].[repl_pub_subs]
+create unique nonclustered index [nci_pub_sub_display_name] ON [dbo].[repl_pub_subs]
+(
+	[publisher] ASC,
+	[publication_display_name] ASC,
+	[subscription_display_name] ASC
+)
+GO
+
+create unique nonclustered index nci_publication_id__agent_id ON [dbo].[repl_pub_subs]
+(	[publication], [agent_name] )
+go
+
+--select * from  [dbo].[repl_pub_subs]
+
+/*
+insert [dbo].[repl_pub_subs]
+(	publisher, publication_display_name, subscription_display_name, publisher_db, 
+	publication, agent_name, subscriber, subscriber_db )
+select srv_pub.name as publisher
+		,[publication_display_name] = QUOTENAME(a.publisher_db)+': '+a.publication
+	,[subscription_display_name] = QUOTENAME(srv_sub.name)+'.'+QUOTENAME(a.subscriber_db)
+	,a.publisher_db, a.publication
+	,a.name as agent_name, srv_sub.name as subscriber, a.subscriber_db
+from distribution.dbo.MSpublications as p with (nolock)
+inner join master.sys.servers as srv_pub on srv_pub.server_id = p.publisher_id
+left join distribution.dbo.MSdistribution_agents as a with (nolock)
+on a.publication = p.publication and a.publisher_db = p.publisher_db and a.publisher_id = p.publisher_id
+inner join master.sys.servers as srv_sub on srv_sub.server_id = a.subscriber_id
+where not exists (
+		select * from [dbo].[repl_pub_subs] i 
+		where i.publisher = srv_pub.name 
+		and i.publication_display_name = QUOTENAME(a.publisher_db)+': '+a.publication
+		and i.subscription_display_name = QUOTENAME(srv_sub.name)+'.'+QUOTENAME(a.subscriber_db)
+	);
+*/
+
+
 CREATE TABLE [dbo].[repl_token_header]
 (
 	[publisher] [varchar](200) NOT NULL,
@@ -41,37 +99,36 @@ create clustered index ci_replication_tokens_insert_log on [dbo].[repl_token_ins
 go
 
 
--- drop table [dbo].[repl_token_history]
 
 CREATE TABLE [dbo].[repl_token_history]
 (
-	[id] bigint identity(1,1) not null,
-	[publisher] [sysname] not null,
-	[publication_display_name] nvarchar(1000) not null,
-	[subscription_display_name] nvarchar(1000) not null,
-	[publisher_db] [sysname] not null,
-	[publication] [sysname] NOT NULL,
+	[repl_id] int not null,
 	[publisher_commit] [datetime] NOT NULL,
 	[distributor_commit] [datetime] NOT NULL,
 	[distributor_latency] int not null, --AS datediff(minute,publisher_commit,distributor_commit),
-	[subscriber] [sysname] NOT NULL,
-	[subscriber_db] [sysname] NOT NULL,
 	[subscriber_commit] [datetime] NOT NULL,
 	[subscriber_latency] int not null, -- AS datediff(minute,distributor_commit,subscriber_commit),
 	[overall_latency] int not null, --AS datediff(minute,publisher_commit,subscriber_commit),
-	[agent_name] nvarchar(2000) not null,
 	[collection_time_utc] [datetime2] NOT NULL DEFAULT sysutcdatetime()
-	,constraint pk_repl_token_history primary key clustered ([collection_time_utc],id) on ps_dba([collection_time_utc])
+	,constraint pk_repl_token_history primary key clustered ([repl_id],[publisher_commit],[collection_time_utc]) on ps_dba([collection_time_utc])
 ) on ps_dba([collection_time_utc])
 GO
 
-USE [DBA_Admin]
-GO
+create nonclustered index nci_collection_time_utc on [dbo].[repl_token_history] ([collection_time_utc]) on ps_dba([collection_time_utc])
+go
 
---DROP INDEX [nci_repl_token_history] ON [dbo].[repl_token_history]
-GO
 
-create nonclustered index nci_repl_token_history on dbo.[repl_token_history]
-	--(publisher, publication_display_name, subscription_display_name, publisher_commit desc) include (overall_latency) on ps_dba([collection_time_utc])
-	(publisher, publication_display_name, subscription_display_name, publisher_commit desc) include (overall_latency)
+-- Get Latest Latency
+create or alter view dbo.vw_repl_latency
+with schemabinding
+as
+select sub.publisher, sub.publication_display_name, sub.subscription_display_name, last_token_time = h.publisher_commit, last_token_latency_seconds = h.overall_latency
+		,current_latency_seconds = datediff(second,h.collection_time_utc,SYSUTCDATETIME()), h.collection_time_utc
+from dbo.repl_pub_subs as sub
+outer apply (select top 1 h.publisher_commit, h.overall_latency, h.collection_time_utc from dbo.repl_token_history h 
+			where h.repl_id = sub.repl_id order by publisher_commit desc) as h;
+go
+
+select *
+from dbo.vw_repl_latency
 go

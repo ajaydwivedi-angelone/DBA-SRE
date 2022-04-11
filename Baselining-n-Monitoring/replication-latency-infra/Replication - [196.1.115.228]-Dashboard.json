@@ -22,7 +22,7 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
   "id": 207,
-  "iteration": 1649064903881,
+  "iteration": 1649672066665,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -113,7 +113,7 @@
             "uid": "RhwH5By7z"
           },
           "format": "table",
-          "rawSql": "declare @publisher sysname;\r\ndeclare @publication nvarchar(1000);\r\ndeclare @subscription nvarchar(1000);\r\ndeclare @latency int;\r\n\r\nif len('$publisher') > 0\r\n  set @publisher = '$publisher';\r\nif len('$publication') > 0\r\n  set @publication = '$publication'\r\nif len('$subscription') > 0\r\n  set @subscription = '$subscription';\r\nif len('$latency') > 0\r\n  set @latency = convert(int,'$latency')\r\n\r\n;with cte_latency as (\r\n  select top 1 with ties h.publisher, publication_display_name, subscription_display_name, last_token_time = publisher_commit, last_token_latency = overall_latency\r\n  \t\t,current_approx_latency = datediff(second,collection_time_utc,SYSUTCDATETIME())\r\n  from [196.1.115.228].DBA_Admin.dbo.[repl_token_history] h\r\n  where 1 = 1\r\n  and (@publisher is null or h.publisher like ('%'+@publisher+'%'))\r\n  and (@publication is null or h.publication_display_name like ('%'+@publication+'%'))\r\n  and (@subscription is null or h.subscription_display_name like ('%'+@subscription+'%'))\r\n  order by ROW_NUMBER()over(partition by publisher, publication_display_name, subscription_display_name order by publisher_commit desc)\r\n)\r\nselect *\r\nfrom cte_latency\r\nwhere (@latency is null or current_approx_latency >= @latency)",
+          "rawSql": "declare @publisher sysname;\r\ndeclare @publication nvarchar(1000);\r\ndeclare @subscription nvarchar(1000);\r\ndeclare @latency int;\r\n\r\nif len('$publisher') > 0\r\n  set @publisher = '$publisher';\r\nif len('$publication') > 0\r\n  set @publication = '$publication'\r\nif len('$subscription') > 0\r\n  set @subscription = '$subscription';\r\nif len('$latency') > 0\r\n  set @latency = convert(int,'$latency')\r\n\r\n;with cte_latency as (\r\n  select h.publisher, publication_display_name, subscription_display_name, last_token_time, last_token_latency = last_token_latency_seconds\r\n  \t\t,current_approx_latency = current_latency_seconds\r\n  from [196.1.115.228].DBA_Admin.dbo.vw_repl_latency h\r\n  where 1 = 1\r\n  and (@publisher is null or h.publisher like ('%'+@publisher+'%'))\r\n  and (@publication is null or h.publication_display_name like ('%'+@publication+'%'))\r\n  and (@subscription is null or h.subscription_display_name like ('%'+@subscription+'%'))\r\n)\r\nselect *\r\nfrom cte_latency\r\nwhere (@latency is null or current_approx_latency >= @latency)",
           "refId": "A"
         }
       ],
@@ -294,7 +294,7 @@
                 "uid": "RhwH5By7z"
               },
               "format": "time_series",
-              "rawSql": "declare @publisher sysname;\r\ndeclare @publication nvarchar(1000);\r\ndeclare @subscription nvarchar(1000);\r\ndeclare @latency int;\r\n\r\nif len('$publisher') > 0\r\n  set @publisher = '$publisher';\r\nif len('$publication') > 0\r\n  set @publication = '$publication'\r\nif len('$subscription') > 0\r\n  set @subscription = '$subscription';\r\nif len('$latency') > 0\r\n  set @latency = convert(int,'$latency')\r\n  \r\n--select [from] = dbo.utc2local($__timeFrom()), [to] = dbo.utc2local($__timeTo())\r\n\r\nselect dbo.local2utc(publisher_commit) as time, [replication] = [publisher]+'->'+publication_display_name+' => '+subscription_display_name, overall_latency\r\nfrom [196.1.115.228].DBA_Admin.dbo.[repl_token_history] h\r\nwhere (publisher_commit between dbo.utc2local($__timeFrom()) and dbo.utc2local($__timeTo()))\r\nand (@publisher is null or h.publisher like ('%'+@publisher+'%'))\r\nand (@publication is null or h.publication_display_name like ('%'+@publication+'%'))\r\nand (@subscription is null or h.subscription_display_name like ('%'+@subscription+'%'))\r\norder by time",
+              "rawSql": "declare @publisher sysname;\r\ndeclare @publication nvarchar(1000);\r\ndeclare @subscription nvarchar(1000);\r\ndeclare @latency int;\r\n\r\nif len('$publisher') > 0\r\n  set @publisher = '$publisher';\r\nif len('$publication') > 0\r\n  set @publication = '$publication'\r\nif len('$subscription') > 0\r\n  set @subscription = '$subscription';\r\nif len('$latency') > 0\r\n  set @latency = convert(int,'$latency')\r\n  \r\n--select [from] = dbo.utc2local($__timeFrom()), [to] = dbo.utc2local($__timeTo())\r\n\r\n;with cte_subs as (\r\n\tselect * from [196.1.115.228].DBA_Admin.dbo.repl_pub_subs as sub\r\n\twhere (@publisher is null or sub.publisher like ('%'+@publisher+'%'))\r\n\tand (@publication is null or sub.publication_display_name like ('%'+@publication+'%'))\r\n\tand (@subscription is null or sub.subscription_display_name like ('%'+@subscription+'%'))\r\n)\r\nselect dbo.local2utc(publisher_commit) as time, [metric] = [publisher]+'->'+publication_display_name+' => '+subscription_display_name, value = overall_latency\r\nfrom [196.1.115.228].DBA_Admin.dbo.[repl_token_history] h join cte_subs sub on sub.repl_id = h.repl_id \r\nwhere (publisher_commit between dbo.utc2local($__timeFrom()) and dbo.utc2local($__timeTo()))\r\norder by time",
               "refId": "A"
             }
           ],
@@ -306,6 +306,7 @@
       "type": "row"
     }
   ],
+  "refresh": "",
   "schemaVersion": 34,
   "style": "dark",
   "tags": [],
@@ -334,8 +335,8 @@
       {
         "current": {
           "selected": false,
-          "text": "ledger1",
-          "value": "ledger1"
+          "text": "",
+          "value": ""
         },
         "hide": 0,
         "label": "Publication",
@@ -343,11 +344,11 @@
         "options": [
           {
             "selected": true,
-            "text": "ledger1",
-            "value": "ledger1"
+            "text": "",
+            "value": ""
           }
         ],
-        "query": "ledger1",
+        "query": "",
         "skipUrlSync": false,
         "type": "textbox"
       },
@@ -394,13 +395,13 @@
     ]
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-30m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "Replication - [196.1.115.228]",
   "uid": "S763Ersnk",
-  "version": 6,
+  "version": 13,
   "weekStart": ""
 }
