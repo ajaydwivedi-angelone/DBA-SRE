@@ -1,0 +1,406 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "target": {
+          "limit": 100,
+          "matchAny": false,
+          "tags": [],
+          "type": "dashboard"
+        },
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 207,
+  "iteration": 1649064903881,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 2,
+      "panels": [],
+      "title": "Replication - Current Latency",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "mssql",
+        "uid": "RhwH5By7z"
+      },
+      "description": "Latency <= 180 Seconds should be ignored as this much latency could be due to technical limitations in this infra itself.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto",
+            "filterable": true
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 180
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "subscription_display_name"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 308
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 13,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "id": 4,
+      "options": {
+        "footer": {
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": []
+      },
+      "pluginVersion": "8.3.3",
+      "targets": [
+        {
+          "alias": "",
+          "datasource": {
+            "type": "mssql",
+            "uid": "RhwH5By7z"
+          },
+          "format": "table",
+          "rawSql": "declare @publisher sysname;\r\ndeclare @publication nvarchar(1000);\r\ndeclare @subscription nvarchar(1000);\r\ndeclare @latency int;\r\n\r\nif len('$publisher') > 0\r\n  set @publisher = '$publisher';\r\nif len('$publication') > 0\r\n  set @publication = '$publication'\r\nif len('$subscription') > 0\r\n  set @subscription = '$subscription';\r\nif len('$latency') > 0\r\n  set @latency = convert(int,'$latency')\r\n\r\n;with cte_latency as (\r\n  select top 1 with ties h.publisher, publication_display_name, subscription_display_name, last_token_time = publisher_commit, last_token_latency = overall_latency\r\n  \t\t,current_approx_latency = datediff(second,collection_time_utc,SYSUTCDATETIME())\r\n  from [196.1.115.228].DBA_Admin.dbo.[repl_token_history] h\r\n  where 1 = 1\r\n  and (@publisher is null or h.publisher like ('%'+@publisher+'%'))\r\n  and (@publication is null or h.publication_display_name like ('%'+@publication+'%'))\r\n  and (@subscription is null or h.subscription_display_name like ('%'+@subscription+'%'))\r\n  order by ROW_NUMBER()over(partition by publisher, publication_display_name, subscription_display_name order by publisher_commit desc)\r\n)\r\nselect *\r\nfrom cte_latency\r\nwhere (@latency is null or current_approx_latency >= @latency)",
+          "refId": "A"
+        }
+      ],
+      "title": "Replication Current Latency",
+      "type": "table"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "id": 6,
+      "panels": [
+        {
+          "datasource": {
+            "type": "mssql",
+            "uid": "RhwH5By7z"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "custom": {
+                "align": "auto",
+                "displayMode": "auto"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 24,
+            "x": 0,
+            "y": 2
+          },
+          "id": 8,
+          "options": {
+            "footer": {
+              "fields": "",
+              "reducer": [
+                "sum"
+              ],
+              "show": false
+            },
+            "showHeader": true
+          },
+          "pluginVersion": "8.3.3",
+          "targets": [
+            {
+              "alias": "",
+              "datasource": {
+                "type": "mssql",
+                "uid": "RhwH5By7z"
+              },
+              "format": "table",
+              "rawSql": "declare @publisher sysname;\r\ndeclare @publication nvarchar(1000);\r\ndeclare @subscription nvarchar(1000);\r\n\r\nif len('$publisher') > 0\r\n  set @publisher = '$publisher';\r\nif len('$publication') > 0\r\n  set @publication = '$publication'\r\n\r\nselect *\r\nfrom [196.1.115.228].DBA_Admin.[dbo].[repl_token_insert_log] l\r\nwhere $__timeFilter(CollectionTimeUTC)\r\nand (@publisher is null or publisher like ('%'+@publisher+'%'))\r\nand (@publication is null or publication like ('%'+@publication+'%'))",
+              "refId": "A"
+            }
+          ],
+          "title": "Replication Infra - Errors",
+          "type": "table"
+        }
+      ],
+      "title": "Replication Infra - Errors",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      },
+      "id": 12,
+      "panels": [
+        {
+          "datasource": {
+            "type": "mssql",
+            "uid": "RhwH5By7z"
+          },
+          "description": "Latency <= 180 Seconds should be ignored as this much latency could be due to technical limitations in this infra itself.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 18,
+            "w": 24,
+            "x": 0,
+            "y": 3
+          },
+          "id": 10,
+          "options": {
+            "legend": {
+              "calcs": [
+                "mean",
+                "max"
+              ],
+              "displayMode": "list",
+              "placement": "right"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "pluginVersion": "8.3.3",
+          "targets": [
+            {
+              "alias": "",
+              "datasource": {
+                "type": "mssql",
+                "uid": "RhwH5By7z"
+              },
+              "format": "time_series",
+              "rawSql": "declare @publisher sysname;\r\ndeclare @publication nvarchar(1000);\r\ndeclare @subscription nvarchar(1000);\r\ndeclare @latency int;\r\n\r\nif len('$publisher') > 0\r\n  set @publisher = '$publisher';\r\nif len('$publication') > 0\r\n  set @publication = '$publication'\r\nif len('$subscription') > 0\r\n  set @subscription = '$subscription';\r\nif len('$latency') > 0\r\n  set @latency = convert(int,'$latency')\r\n  \r\n--select [from] = dbo.utc2local($__timeFrom()), [to] = dbo.utc2local($__timeTo())\r\n\r\nselect dbo.local2utc(publisher_commit) as time, [replication] = [publisher]+'->'+publication_display_name+' => '+subscription_display_name, overall_latency\r\nfrom [196.1.115.228].DBA_Admin.dbo.[repl_token_history] h\r\nwhere (publisher_commit between dbo.utc2local($__timeFrom()) and dbo.utc2local($__timeTo()))\r\nand (@publisher is null or h.publisher like ('%'+@publisher+'%'))\r\nand (@publication is null or h.publication_display_name like ('%'+@publication+'%'))\r\nand (@subscription is null or h.subscription_display_name like ('%'+@subscription+'%'))\r\norder by time",
+              "refId": "A"
+            }
+          ],
+          "title": "Replication Current Latency",
+          "type": "timeseries"
+        }
+      ],
+      "title": "Replication - Latency History",
+      "type": "row"
+    }
+  ],
+  "schemaVersion": 34,
+  "style": "dark",
+  "tags": [],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "hide": 0,
+        "label": "Publisher",
+        "name": "publisher",
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "query": "",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "ledger1",
+          "value": "ledger1"
+        },
+        "hide": 0,
+        "label": "Publication",
+        "name": "publication",
+        "options": [
+          {
+            "selected": true,
+            "text": "ledger1",
+            "value": "ledger1"
+          }
+        ],
+        "query": "ledger1",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "hide": 0,
+        "label": "Subscription",
+        "name": "subscription",
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "query": "",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "hide": 0,
+        "label": "Latency (Sec)",
+        "name": "latency",
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "query": "",
+        "skipUrlSync": false,
+        "type": "textbox"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Replication - [196.1.115.228]",
+  "uid": "S763Ersnk",
+  "version": 6,
+  "weekStart": ""
+}
