@@ -22,7 +22,7 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
   "id": 207,
-  "iteration": 1649672066665,
+  "iteration": 1649737715450,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -80,7 +80,31 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 308
+                "value": 500
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "publication_display_name"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 500
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "last_token_latency"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
               }
             ]
           }
@@ -113,7 +137,7 @@
             "uid": "RhwH5By7z"
           },
           "format": "table",
-          "rawSql": "declare @publisher sysname;\r\ndeclare @publication nvarchar(1000);\r\ndeclare @subscription nvarchar(1000);\r\ndeclare @latency int;\r\n\r\nif len('$publisher') > 0\r\n  set @publisher = '$publisher';\r\nif len('$publication') > 0\r\n  set @publication = '$publication'\r\nif len('$subscription') > 0\r\n  set @subscription = '$subscription';\r\nif len('$latency') > 0\r\n  set @latency = convert(int,'$latency')\r\n\r\n;with cte_latency as (\r\n  select h.publisher, publication_display_name, subscription_display_name, last_token_time, last_token_latency = last_token_latency_seconds\r\n  \t\t,current_approx_latency = current_latency_seconds\r\n  from [196.1.115.228].DBA_Admin.dbo.vw_repl_latency h\r\n  where 1 = 1\r\n  and (@publisher is null or h.publisher like ('%'+@publisher+'%'))\r\n  and (@publication is null or h.publication_display_name like ('%'+@publication+'%'))\r\n  and (@subscription is null or h.subscription_display_name like ('%'+@subscription+'%'))\r\n)\r\nselect *\r\nfrom cte_latency\r\nwhere (@latency is null or current_approx_latency >= @latency)",
+          "rawSql": "declare @publisher sysname;\r\ndeclare @publication nvarchar(1000);\r\ndeclare @subscription nvarchar(1000);\r\ndeclare @latency int;\r\n\r\nif len('$publisher') > 0\r\n  set @publisher = '$publisher';\r\nif len('$publication') > 0\r\n  set @publication = '$publication'\r\nif len('$subscription') > 0\r\n  set @subscription = '$subscription';\r\nif len('$latency') > 0\r\n  set @latency = convert(int,'$latency')\r\n\r\n;with cte_latency as (\r\n  select h.publisher, publication_display_name, subscription_display_name, last_token_time = convert(varchar,last_token_time,120), last_token_latency = last_token_latency_seconds\r\n  \t\t,current_approx_latency = current_latency_seconds\r\n  from [196.1.115.228].DBA_Admin.dbo.vw_repl_latency h\r\n  where 1 = 1\r\n  and (@publisher is null or h.publisher like ('%'+@publisher+'%'))\r\n  and (@publication is null or h.publication_display_name like ('%'+@publication+'%'))\r\n  and (@subscription is null or h.subscription_display_name like ('%'+@subscription+'%'))\r\n)\r\nselect *\r\nfrom cte_latency\r\nwhere (@latency is null or current_approx_latency >= @latency)\r\norder by current_approx_latency desc, last_token_latency desc",
           "refId": "A"
         }
       ],
@@ -149,8 +173,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -252,8 +275,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -306,7 +328,7 @@
       "type": "row"
     }
   ],
-  "refresh": "",
+  "refresh": "5s",
   "schemaVersion": 34,
   "style": "dark",
   "tags": [],
@@ -314,7 +336,7 @@
     "list": [
       {
         "current": {
-          "selected": false,
+          "selected": true,
           "text": "",
           "value": ""
         },
@@ -334,7 +356,7 @@
       },
       {
         "current": {
-          "selected": false,
+          "selected": true,
           "text": "",
           "value": ""
         },
@@ -354,7 +376,7 @@
       },
       {
         "current": {
-          "selected": false,
+          "selected": true,
           "text": "",
           "value": ""
         },
@@ -375,33 +397,33 @@
       {
         "current": {
           "selected": false,
-          "text": "",
-          "value": ""
+          "text": "240",
+          "value": "240"
         },
         "hide": 0,
         "label": "Latency (Sec)",
         "name": "latency",
         "options": [
           {
-            "selected": true,
+            "selected": false,
             "text": "",
             "value": ""
           }
         ],
-        "query": "",
+        "query": "240",
         "skipUrlSync": false,
         "type": "textbox"
       }
     ]
   },
   "time": {
-    "from": "now-30m",
+    "from": "now-3h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "Replication - [196.1.115.228]",
   "uid": "S763Ersnk",
-  "version": 13,
+  "version": 16,
   "weekStart": ""
 }

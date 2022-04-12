@@ -1,11 +1,11 @@
 USE [msdb]
 GO
 
-/****** Object:  Job [(dba) Partitions-Maintenance]    Script Date: 11-04-2022 16:53:36 ******/
+/****** Object:  Job [(dba) Partitions-Maintenance]    Script Date: 11-04-2022 19:01:14 ******/
 BEGIN TRANSACTION
 DECLARE @ReturnCode INT
 SELECT @ReturnCode = 0
-/****** Object:  JobCategory [(dba) Monitoring & Alerting]    Script Date: 11-04-2022 16:53:36 ******/
+/****** Object:  JobCategory [(dba) Monitoring & Alerting]    Script Date: 11-04-2022 19:01:14 ******/
 IF NOT EXISTS (SELECT name FROM msdb.dbo.syscategories WHERE name=N'(dba) Monitoring & Alerting' AND category_class=1)
 BEGIN
 EXEC @ReturnCode = msdb.dbo.sp_add_category @class=N'JOB', @type=N'LOCAL', @name=N'(dba) Monitoring & Alerting'
@@ -25,8 +25,8 @@ EXEC @ReturnCode =  msdb.dbo.sp_add_job @job_name=N'(dba) Partitions-Maintenance
 		@category_name=N'(dba) Monitoring & Alerting', 
 		@owner_login_name=N'sa', @job_id = @jobId OUTPUT
 IF (@@ERROR <> 0 OR @ReturnCode <> 0) GOTO QuitWithRollback
-/****** Object:  Step [Add partitions - Hourly - Till Next Quarter End]    Script Date: 11-04-2022 16:53:36 ******/
-EXEC @ReturnCode = msdb.dbo.sp_add_jobstep @job_id=@jobId, @step_name=N'Add partitions - Hourly - Till Next Quarter End', 
+/****** Object:  Step [[datetime2] - Add partitions - Hourly - Till Next Quarter End]    Script Date: 11-04-2022 19:01:14 ******/
+EXEC @ReturnCode = msdb.dbo.sp_add_jobstep @job_id=@jobId, @step_name=N'[datetime2] - Add partitions - Hourly - Till Next Quarter End', 
 		@step_id=1, 
 		@cmdexec_success_code=0, 
 		@on_success_action=3, 
@@ -61,11 +61,47 @@ end',
 		@database_name=N'DBA_Admin', 
 		@flags=12
 IF (@@ERROR <> 0 OR @ReturnCode <> 0) GOTO QuitWithRollback
-/****** Object:  Step [Remove Partitions - Retain upto 3 Months]    Script Date: 11-04-2022 16:53:36 ******/
-EXEC @ReturnCode = msdb.dbo.sp_add_jobstep @job_id=@jobId, @step_name=N'Remove Partitions - Retain upto 3 Months', 
+/****** Object:  Step [[datetime] - Add partitions - Hourly - Till Next Quarter End]    Script Date: 11-04-2022 19:01:14 ******/
+EXEC @ReturnCode = msdb.dbo.sp_add_jobstep @job_id=@jobId, @step_name=N'[datetime] - Add partitions - Hourly - Till Next Quarter End', 
 		@step_id=2, 
 		@cmdexec_success_code=0, 
-		@on_success_action=1, 
+		@on_success_action=3, 
+		@on_success_step_id=0, 
+		@on_fail_action=2, 
+		@on_fail_step_id=0, 
+		@retry_attempts=0, 
+		@retry_interval=0, 
+		@os_run_priority=0, @subsystem=N'TSQL', 
+		@command=N'set nocount on;
+SET QUOTED_IDENTIFIER ON;
+
+declare @current_boundary_value datetime;
+declare @target_boundary_value datetime; /* last day of new quarter */
+set @target_boundary_value = DATEADD (dd, -1, DATEADD(qq, DATEDIFF(qq, 0, GETDATE()) +2, 0));
+
+select top 1 @current_boundary_value = convert(datetime,prv.value)
+from sys.partition_range_values prv
+join sys.partition_functions pf on pf.function_id = prv.function_id
+where pf.name = ''pf_dba_datetime''
+order by prv.value desc;
+
+select [@current_boundary_value] = @current_boundary_value, [@target_boundary_value] = @target_boundary_value;
+
+while (@current_boundary_value < @target_boundary_value)
+begin
+	set @current_boundary_value = DATEADD(hour,1,@current_boundary_value);
+	--print @current_boundary_value
+	alter partition scheme ps_dba_datetime next used [primary];
+	alter partition function pf_dba_datetime() split range (@current_boundary_value);	
+end', 
+		@database_name=N'DBA_Admin', 
+		@flags=0
+IF (@@ERROR <> 0 OR @ReturnCode <> 0) GOTO QuitWithRollback
+/****** Object:  Step [[datetime2] - Remove Partitions - Retain upto 3 Months]    Script Date: 11-04-2022 19:01:14 ******/
+EXEC @ReturnCode = msdb.dbo.sp_add_jobstep @job_id=@jobId, @step_name=N'[datetime2] - Remove Partitions - Retain upto 3 Months', 
+		@step_id=3, 
+		@cmdexec_success_code=0, 
+		@on_success_action=3, 
 		@on_success_step_id=0, 
 		@on_fail_action=2, 
 		@on_fail_step_id=0, 
@@ -101,6 +137,46 @@ DEALLOCATE cur_boundaries;',
 		@database_name=N'DBA_Admin', 
 		@flags=12
 IF (@@ERROR <> 0 OR @ReturnCode <> 0) GOTO QuitWithRollback
+/****** Object:  Step [[datetime] - Remove Partitions - Retain upto 3 Months]    Script Date: 11-04-2022 19:01:14 ******/
+EXEC @ReturnCode = msdb.dbo.sp_add_jobstep @job_id=@jobId, @step_name=N'[datetime] - Remove Partitions - Retain upto 3 Months', 
+		@step_id=4, 
+		@cmdexec_success_code=0, 
+		@on_success_action=1, 
+		@on_success_step_id=0, 
+		@on_fail_action=2, 
+		@on_fail_step_id=0, 
+		@retry_attempts=0, 
+		@retry_interval=0, 
+		@os_run_priority=0, @subsystem=N'TSQL', 
+		@command=N'set nocount on;
+SET QUOTED_IDENTIFIER ON;
+
+declare @partition_boundary datetime;
+declare @target_boundary_value datetime; /* 3 months back date */
+set @target_boundary_value = DATEADD(mm,DATEDIFF(mm,0,GETDATE())-3,0);
+--set @target_boundary_value = ''2022-03-25 19:00:00.000''
+
+declare cur_boundaries cursor local fast_forward for
+		select convert(datetime,prv.value) as boundary_value
+		from sys.partition_range_values prv
+		join sys.partition_functions pf on pf.function_id = prv.function_id
+		where pf.name = ''pf_dba_datetime'' and convert(datetime,prv.value) < @target_boundary_value
+		order by prv.value asc;
+
+open cur_boundaries;
+fetch next from cur_boundaries into @partition_boundary;
+while @@FETCH_STATUS = 0
+begin
+	--print @partition_boundary
+	alter partition function pf_dba_datetime() merge range (@partition_boundary);
+
+	fetch next from cur_boundaries into @partition_boundary;
+end
+CLOSE cur_boundaries
+DEALLOCATE cur_boundaries;', 
+		@database_name=N'DBA_Admin', 
+		@flags=12
+IF (@@ERROR <> 0 OR @ReturnCode <> 0) GOTO QuitWithRollback
 EXEC @ReturnCode = msdb.dbo.sp_update_job @job_id = @jobId, @start_step_id = 1
 IF (@@ERROR <> 0 OR @ReturnCode <> 0) GOTO QuitWithRollback
 EXEC @ReturnCode = msdb.dbo.sp_add_jobschedule @job_id=@jobId, @name=N'(dba) Partitions-Maintenance - Daily', 
@@ -126,11 +202,11 @@ QuitWithRollback:
 EndSave:
 GO
 
-/****** Object:  Job [(dba) Purge-Tables]    Script Date: 11-04-2022 16:53:36 ******/
+/****** Object:  Job [(dba) Purge-Tables]    Script Date: 11-04-2022 19:01:15 ******/
 BEGIN TRANSACTION
 DECLARE @ReturnCode INT
 SELECT @ReturnCode = 0
-/****** Object:  JobCategory [Data Collector]    Script Date: 11-04-2022 16:53:36 ******/
+/****** Object:  JobCategory [Data Collector]    Script Date: 11-04-2022 19:01:15 ******/
 IF NOT EXISTS (SELECT name FROM msdb.dbo.syscategories WHERE name=N'Data Collector' AND category_class=1)
 BEGIN
 EXEC @ReturnCode = msdb.dbo.sp_add_category @class=N'JOB', @type=N'LOCAL', @name=N'Data Collector'
@@ -150,7 +226,7 @@ EXEC @ReturnCode =  msdb.dbo.sp_add_job @job_name=N'(dba) Purge-Tables',
 		@category_name=N'Data Collector', 
 		@owner_login_name=N'sa', @job_id = @jobId OUTPUT
 IF (@@ERROR <> 0 OR @ReturnCode <> 0) GOTO QuitWithRollback
-/****** Object:  Step [Purge-Lost-Tokens- dbo.repl_token_header]    Script Date: 11-04-2022 16:53:37 ******/
+/****** Object:  Step [Purge-Lost-Tokens- dbo.repl_token_header]    Script Date: 11-04-2022 19:01:15 ******/
 EXEC @ReturnCode = msdb.dbo.sp_add_jobstep @job_id=@jobId, @step_name=N'Purge-Lost-Tokens- dbo.repl_token_header', 
 		@step_id=1, 
 		@cmdexec_success_code=0, 
@@ -170,7 +246,7 @@ and collection_time <= DATEADD(HOUR,-8,sysdatetime());',
 		@database_name=N'DBA_Admin', 
 		@flags=12
 IF (@@ERROR <> 0 OR @ReturnCode <> 0) GOTO QuitWithRollback
-/****** Object:  Step [dbo.repl_token_header]    Script Date: 11-04-2022 16:53:37 ******/
+/****** Object:  Step [dbo.repl_token_header]    Script Date: 11-04-2022 19:01:15 ******/
 EXEC @ReturnCode = msdb.dbo.sp_add_jobstep @job_id=@jobId, @step_name=N'dbo.repl_token_header', 
 		@step_id=2, 
 		@cmdexec_success_code=0, 
@@ -196,7 +272,7 @@ end',
 		@database_name=N'DBA_Admin', 
 		@flags=12
 IF (@@ERROR <> 0 OR @ReturnCode <> 0) GOTO QuitWithRollback
-/****** Object:  Step [dbo.repl_token_insert_log]    Script Date: 11-04-2022 16:53:37 ******/
+/****** Object:  Step [dbo.repl_token_insert_log]    Script Date: 11-04-2022 19:01:15 ******/
 EXEC @ReturnCode = msdb.dbo.sp_add_jobstep @job_id=@jobId, @step_name=N'dbo.repl_token_insert_log', 
 		@step_id=3, 
 		@cmdexec_success_code=0, 
@@ -224,7 +300,7 @@ end
 		@database_name=N'DBA_Admin', 
 		@flags=12
 IF (@@ERROR <> 0 OR @ReturnCode <> 0) GOTO QuitWithRollback
-/****** Object:  Step [dbo.repl_token_history]    Script Date: 11-04-2022 16:53:37 ******/
+/****** Object:  Step [dbo.repl_token_history]    Script Date: 11-04-2022 19:01:15 ******/
 EXEC @ReturnCode = msdb.dbo.sp_add_jobstep @job_id=@jobId, @step_name=N'dbo.repl_token_history', 
 		@step_id=4, 
 		@cmdexec_success_code=0, 
@@ -275,11 +351,11 @@ QuitWithRollback:
 EndSave:
 GO
 
-/****** Object:  Job [(dba) Replication-Sync-Infra-Details]    Script Date: 11-04-2022 16:53:37 ******/
+/****** Object:  Job [(dba) Replication-Sync-Infra-Details]    Script Date: 11-04-2022 19:01:15 ******/
 BEGIN TRANSACTION
 DECLARE @ReturnCode INT
 SELECT @ReturnCode = 0
-/****** Object:  JobCategory [Database Maintenance]    Script Date: 11-04-2022 16:53:37 ******/
+/****** Object:  JobCategory [Database Maintenance]    Script Date: 11-04-2022 19:01:15 ******/
 IF NOT EXISTS (SELECT name FROM msdb.dbo.syscategories WHERE name=N'Database Maintenance' AND category_class=1)
 BEGIN
 EXEC @ReturnCode = msdb.dbo.sp_add_category @class=N'JOB', @type=N'LOCAL', @name=N'Database Maintenance'
@@ -299,7 +375,7 @@ EXEC @ReturnCode =  msdb.dbo.sp_add_job @job_name=N'(dba) Replication-Sync-Infra
 		@category_name=N'Database Maintenance', 
 		@owner_login_name=N'sa', @job_id = @jobId OUTPUT
 IF (@@ERROR <> 0 OR @ReturnCode <> 0) GOTO QuitWithRollback
-/****** Object:  Step [Populate - [dbo].[repl_pub_subs]]    Script Date: 11-04-2022 16:53:37 ******/
+/****** Object:  Step [Populate - [dbo].[repl_pub_subs]]    Script Date: 11-04-2022 19:01:15 ******/
 EXEC @ReturnCode = msdb.dbo.sp_add_jobstep @job_id=@jobId, @step_name=N'Populate - [dbo].[repl_pub_subs]', 
 		@step_id=1, 
 		@cmdexec_success_code=0, 
@@ -357,11 +433,11 @@ QuitWithRollback:
 EndSave:
 GO
 
-/****** Object:  Job [(dba) Replication-Token-History-Fetch]    Script Date: 11-04-2022 16:53:37 ******/
+/****** Object:  Job [(dba) Replication-Token-History-Fetch]    Script Date: 11-04-2022 19:01:15 ******/
 BEGIN TRANSACTION
 DECLARE @ReturnCode INT
 SELECT @ReturnCode = 0
-/****** Object:  JobCategory [Data Collector]    Script Date: 11-04-2022 16:53:37 ******/
+/****** Object:  JobCategory [Data Collector]    Script Date: 11-04-2022 19:01:15 ******/
 IF NOT EXISTS (SELECT name FROM msdb.dbo.syscategories WHERE name=N'Data Collector' AND category_class=1)
 BEGIN
 EXEC @ReturnCode = msdb.dbo.sp_add_category @class=N'JOB', @type=N'LOCAL', @name=N'Data Collector'
@@ -381,7 +457,7 @@ EXEC @ReturnCode =  msdb.dbo.sp_add_job @job_name=N'(dba) Replication-Token-Hist
 		@category_name=N'Data Collector', 
 		@owner_login_name=N'sa', @job_id = @jobId OUTPUT
 IF (@@ERROR <> 0 OR @ReturnCode <> 0) GOTO QuitWithRollback
-/****** Object:  Step [Process-Repl-Tokens]    Script Date: 11-04-2022 16:53:37 ******/
+/****** Object:  Step [Process-Repl-Tokens]    Script Date: 11-04-2022 19:01:15 ******/
 EXEC @ReturnCode = msdb.dbo.sp_add_jobstep @job_id=@jobId, @step_name=N'Process-Repl-Tokens', 
 		@step_id=1, 
 		@cmdexec_success_code=0, 
