@@ -134,7 +134,7 @@ as
 select sub.publisher, sub.publication_display_name, sub.subscription_display_name, last_token_time = h.publisher_commit, last_token_latency_seconds = h.overall_latency
 		,current_latency_seconds = datediff(second,h.collection_time_utc,SYSUTCDATETIME()), h.collection_time_utc
 from dbo.repl_pub_subs as sub
-outer apply (select top 1 h.publisher_commit, h.overall_latency, h.collection_time_utc from dbo.repl_token_history h 
+outer apply (select top 1 h.publisher_commit, h.overall_latency, h.collection_time_utc from dbo.repl_token_history h with (forceseek)
 			where h.repl_id = sub.repl_id order by publisher_commit desc) as h;
 go
 
